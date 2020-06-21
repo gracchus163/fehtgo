@@ -1,0 +1,6 @@
+{#after creating a twitter dev account
+		"AccessToken":	"long string",
+		"AccessTokenSecret": "long string",
+		"ConsumerKey": "long string",
+		"ConsumerSecret": "long string"
+	}
