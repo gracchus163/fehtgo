@@ -34,7 +34,6 @@ func getClient(creds *Credentials) (*twitter.Client, error) {
 	return client, nil
 }
 func main() {
-	fmt.Println("im a bot")
 	cfg, err := os.Open("tokens.json")
 	if err != nil {
 		log.Println(err)
@@ -55,20 +54,33 @@ func main() {
 		return
 	}
 
-	fmt.Printf("%+v\n", client)
-	params := &twitter.UserShowParams{ScreenName: "nobody_stop_me"}
+	nick := "nobody_stop_me"
+	count := 150
 	paras := &twitter.UserTimelineParams{
-		ScreenName: "byyourlogic",
-		Count:		10,
+		ScreenName: nick,
+		Count:		count,
 	}
-	user, _, err := client.Users.Show(params)
-	println(user.FollowersCount)
-	twts, _, err := client.Timelines.UserTimeline(paras)
-	println(twts[0].Text)
-	ent := twts[0].ExtendedEntities
-	if ent == nil {
-		log.Println("no media")
+
+	rate_paras := &twitter.RateLimitParams{
+		Resources: []string{"statuses"},
+	}
+	limit, _, err := client.RateLimits.Status(rate_paras)
+	if err != nil {
+		log.Println("error getting rate limit")
+		log.Println(err)
 		return
 	}
-	println(ent.Media[0].MediaURL)
+	m := limit.Resources.Statuses
+	for k, v := range m {
+		fmt.Println("Key: ", k, "value: ", v)
+	}
+	//log.Printf("limit %d\n", limit.Resources.Users["limit"])
+	twts, _, err := client.Timelines.UserTimeline(paras)
+	for _, twt := range twts {
+		if twt.ExtendedEntities != nil {
+			for j, u := range twt.ExtendedEntities.Media {
+				fmt.Printf("%d %s\n", j, u.MediaURL)
+			}
+		}
+	}
 }
