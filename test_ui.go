@@ -7,7 +7,7 @@ import (
 	"fyne.io/fyne/layout"
 	"fmt"
 )
-
+var page_total int = 1
 func main() {
 	app := app.New()
 
@@ -46,7 +46,7 @@ func onPress(ev *fyne.KeyEvent, w fyne.Window, grid *fyne.Container, img []*canv
 	fmt.Println("KeyDown: "+string(ev.Name))
 	if (ev.Name == "Right") {
 		*page += 1
-		fmt.Println(*page)
+		if (*page > page_total) {*page = page_total}
 		grid = fyne.NewContainerWithLayout(layout.NewGridLayout(2),
 			img[4**page], img[1+(4**page)], img[2+(4**page)], img[3+(4**page)])
 		w.SetContent(grid)
@@ -54,7 +54,6 @@ func onPress(ev *fyne.KeyEvent, w fyne.Window, grid *fyne.Container, img []*canv
 	if (ev.Name == "Left") {
 		*page -= 1
 		if (*page < 0) {*page = 0}
-		fmt.Println(*page)
 		grid = fyne.NewContainerWithLayout(layout.NewGridLayout(2),
 			img[4**page], img[1+(4**page)], img[2+(4**page)], img[3+(4**page)])
 		w.SetContent(grid)
