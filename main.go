@@ -38,13 +38,13 @@ func getClient(creds *Credentials) (*twitter.Client, error) {
 	if err != nil {
 		return nil, err
 	}
-	//log.Printf("User's account: %+v\n", user)
 	return client, nil
 }
 var image_count = 0
 var image_total = 0
 var page int
 var page_total int
+var id_list []string
 func main() {
 	cfg, err := os.Open("tokens.json")
 	if err != nil {
@@ -67,7 +67,7 @@ func main() {
 	}
 
 	nick := "gatorsdaily"
-	count := 20 //200 max
+	count := 200 //200 max
 	var img[]*canvas.Image
 	var maxid int64
 	img, maxid, err = get_twts(client, nick, count, 0, img)
@@ -87,6 +87,12 @@ func main() {
 		img[0], img[1], img[2], img[3])
 	w.Canvas().SetOnTypedKey(func(ev *fyne.KeyEvent) {
 		if (string(ev.Name) == "Q") {app.Quit()}
+		if (string(ev.Name) == "Space") {
+			fmt.Println("1 "+id_list[image_count])
+			fmt.Println("2 "+id_list[image_count+1])
+			fmt.Println("3 "+id_list[image_count+2])
+			fmt.Println("4 "+id_list[image_count+3])
+		}
 		onPress(ev, w,grid, img)
 		if (image_count+8) > (len(img)-1) {
 			fmt.Printf("get more tweets. count %d len-1 %d\n", image_count, len(img)-1)
@@ -161,7 +167,6 @@ func get_twts(client *twitter.Client, nick string, count int, maxid int64, img [
 		maxid = min(maxid, twt.ID)
 		if twt.ExtendedEntities != nil {
 			for _, u := range twt.ExtendedEntities.Media {
-				//fmt.Printf("%d %s\n", j, u.MediaURL)
 				resp, e := http.Get(u.MediaURL)
 				if e != nil {log.Fatal(e)}
 				defer resp.Body.Close()
@@ -170,12 +175,11 @@ func get_twts(client *twitter.Client, nick string, count int, maxid int64, img [
 				defer f.Close()
 				_,e = io.Copy(f, resp.Body)
 				if e != nil {log.Fatal(err)}
-				//img[image_count] = canvas.NewImageFromFile(f.Name())
-				//img[image_count].FillMode = canvas.ImageFillContain
 				img = append(img, canvas.NewImageFromFile(f.Name()))
 				img[len(img)-1].FillMode = canvas.ImageFillContain
+				s := fmt.Sprintf("https://twitter.com/%s/status/%d", nick, twt.ID)
+				id_list = append(id_list, s)
 				image_total += 1
-				//if image_count >= image_total { goto End }
 			}
 		}
 	}
