@@ -16,9 +16,6 @@ import (
 	"fyne.io/fyne/canvas"
 	"fyne.io/fyne/layout"
 )
-var page_total int
-var image_total int
-var page int
 type Credentials struct {
 	ConsumerKey			string
 	ConsumerSecret		string
@@ -44,6 +41,10 @@ func getClient(creds *Credentials) (*twitter.Client, error) {
 	//log.Printf("User's account: %+v\n", user)
 	return client, nil
 }
+var image_count = 0
+var image_total = 0
+var page int
+var page_total int
 func main() {
 	cfg, err := os.Open("tokens.json")
 	if err != nil {
@@ -66,13 +67,75 @@ func main() {
 	}
 
 	nick := "gatorsdaily"
-	count := 200
-	page_total = 7
-	image_count := 0
-	image_total = 4*page_total
-	paras := &twitter.UserTimelineParams{
-		ScreenName: nick,
-		Count:		count,
+	count := 20 //200 max
+	var img[]*canvas.Image
+	var maxid int64
+	img, maxid, err = get_twts(client, nick, count, 0, img)
+	fmt.Printf("maxid %d\n", maxid)
+	if err != nil {
+		log.Println(err)
+		return
+	}
+
+	app := app.New()
+	w := app.NewWindow("fehtgo")
+	page = 0
+	page_total = image_total/4
+	if image_total%4 > 0 {page_total++}
+	fmt.Printf("images %d pages %d", len(img), page_total)
+	grid := fyne.NewContainerWithLayout(layout.NewGridLayout(2),
+		img[0], img[1], img[2], img[3])
+	w.Canvas().SetOnTypedKey(func(ev *fyne.KeyEvent) {
+		if (string(ev.Name) == "Q") {app.Quit()}
+		onPress(ev, w,grid, img)
+		if (image_count+8) > (len(img)-1) {
+			fmt.Printf("get more tweets. count %d len-1 %d\n", image_count, len(img)-1)
+			img, maxid, err = get_twts(client, nick, count, maxid, img)
+		}
+	})
+	w.SetContent(grid)
+	w.ShowAndRun()
+}
+func onPress(ev *fyne.KeyEvent, w fyne.Window, grid *fyne.Container, img []*canvas.Image) {
+	fmt.Println("KeyDown: "+string(ev.Name))
+	if (ev.Name == "Right") {
+			if (image_count+4)<(len(img)-1) {
+				image_count+=4
+				fmt.Printf("page %d image_count %d\n", page, image_count)
+				if (image_count+4)<(len(img)) {
+					grid = fyne.NewContainerWithLayout(layout.NewGridLayout(2),
+						img[image_count], img[image_count+1], img[image_count+2], img[image_count+3])
+				} else {
+					rem := len(img)-image_count
+					grid = fyne.NewContainerWithLayout(layout.NewGridLayout(2),
+							img[image_count])
+					for i:=1;i < rem; i++ {
+						fmt.Println(image_count+i)
+						grid.AddObject(img[image_count+i])
+					}
+				}
+				w.SetContent(grid)
+			}
+	} else if (ev.Name == "Left") {
+		image_count-=4
+		if (image_count < 0) {image_count = 0}
+		grid = fyne.NewContainerWithLayout(layout.NewGridLayout(2),
+			img[image_count], img[image_count+1], img[image_count+2], img[image_count+3])
+		w.SetContent(grid)
+	}
+}
+func get_twts(client *twitter.Client, nick string, count int, maxid int64, img []*canvas.Image)([]*canvas.Image,int64, error){
+
+		paras := &twitter.UserTimelineParams{
+			ScreenName: nick,
+			Count:		count,
+		}
+	if maxid != 0 {
+		paras = &twitter.UserTimelineParams{
+			ScreenName: nick,
+			Count:		count,
+			MaxID:		maxid,
+		}
 	}
 
 	rate_paras := &twitter.RateLimitParams{
@@ -82,7 +145,7 @@ func main() {
 	if err != nil {
 		log.Println("error getting rate limit")
 		log.Println(err)
-		return
+		return img, -1, err
 	}
 	t := limit.Resources.Statuses["/statuses/user_timeline"]
 	fmt.Printf("remaining: %d\n", t.Remaining)
@@ -91,8 +154,11 @@ func main() {
 		log.Println("Reset at", time.Unix(int64(t.Reset),0).String())
 	}
 	twts, _, err := client.Timelines.UserTimeline(paras)
-	img := make([]*canvas.Image, image_total, image_total)
+
+	fmt.Printf("Tweets: %d\n", len(twts))
+	maxid = twts[0].ID
 	for _, twt := range twts {
+		maxid = min(maxid, twt.ID)
 		if twt.ExtendedEntities != nil {
 			for _, u := range twt.ExtendedEntities.Media {
 				//fmt.Printf("%d %s\n", j, u.MediaURL)
@@ -104,41 +170,20 @@ func main() {
 				defer f.Close()
 				_,e = io.Copy(f, resp.Body)
 				if e != nil {log.Fatal(err)}
-				img[image_count] = canvas.NewImageFromFile(f.Name())
-				img[image_count].FillMode = canvas.ImageFillContain
-				image_count += 1
-				if image_count >= image_total {
-					goto End
-				}
+				//img[image_count] = canvas.NewImageFromFile(f.Name())
+				//img[image_count].FillMode = canvas.ImageFillContain
+				img = append(img, canvas.NewImageFromFile(f.Name()))
+				img[len(img)-1].FillMode = canvas.ImageFillContain
+				image_total += 1
+				//if image_count >= image_total { goto End }
 			}
 		}
 	}
-	End:
-	app := app.New()
-	w := app.NewWindow("fehtgo")
-	page = 0
-	grid := fyne.NewContainerWithLayout(layout.NewGridLayout(2),
-		img[0], img[1], img[2], img[3])
-	w.Canvas().SetOnTypedKey(func(ev *fyne.KeyEvent) {
-		if (string(ev.Name) == "Q") {app.Quit()}
-		onPress(ev, w,grid, img, &page)
-	})
-	w.SetContent(grid)
-	w.ShowAndRun()
+	return img, maxid, nil
 }
-func onPress(ev *fyne.KeyEvent, w fyne.Window, grid *fyne.Container, img []*canvas.Image, page *int) {
-	fmt.Println("KeyDown: "+string(ev.Name))
-	if (ev.Name == "Right") {
-		*page += 1
-		if (*page >= page_total) {*page = page_total-1}
-		grid = fyne.NewContainerWithLayout(layout.NewGridLayout(2),
-			img[4**page], img[1+(4**page)], img[2+(4**page)], img[3+(4**page)])
-		w.SetContent(grid)
-	} else if (ev.Name == "Left") {
-		*page -= 1
-		if (*page < 0) {*page = 0}
-		grid = fyne.NewContainerWithLayout(layout.NewGridLayout(2),
-			img[4**page], img[1+(4**page)], img[2+(4**page)], img[3+(4**page)])
-		w.SetContent(grid)
-	}
+func min(x, y int64) int64 {
+ if x < y {
+   return x
+ }
+ return y
 }
