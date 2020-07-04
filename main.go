@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"flag"
 	"log"
 	"time"
 	"github.com/dghubble/go-twitter/twitter"
@@ -66,8 +67,11 @@ func main() {
 		return
 	}
 
-	nick := "gatorsdaily"
-	count := 200 //200 max
+	var nick string
+	var count int
+	flag.StringVar(&nick, "nick", "gatorsdaily", "twitter nickname to grab")
+	flag.IntVar(&count, "count", 40, "number of tweets to get at a time")
+	flag.Parse()
 	var img[]*canvas.Image
 	var maxid int64
 	img, maxid, err = get_twts(client, nick, count, 0, img)
