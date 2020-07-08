@@ -42,9 +42,6 @@ func getClient(creds *Credentials) (*twitter.Client, error) {
 	return client, nil
 }
 var image_count = 0
-var image_total = 0
-var page int
-var page_total int
 var id_list []string
 func main() {
 	cfg, err := os.Open("tokens.json")
@@ -72,6 +69,7 @@ func main() {
 	flag.StringVar(&nick, "nick", "gatorsdaily", "twitter nickname to grab")
 	flag.IntVar(&count, "count", 40, "number of tweets to get at a time")
 	flag.Parse()
+	threshold := 12
 	var img[]*canvas.Image
 	var maxid int64
 	img, maxid, err = get_twts(client, nick, count, 0, img)
@@ -83,35 +81,43 @@ func main() {
 
 	app := app.New()
 	w := app.NewWindow("fehtgo")
-	page = 0
-	page_total = image_total/4
-	if image_total%4 > 0 {page_total++}
-	fmt.Printf("images %d pages %d", len(img), page_total)
 	grid := fyne.NewContainerWithLayout(layout.NewGridLayout(2),
 		img[0], img[1], img[2], img[3])
+	growing := false
 	w.Canvas().SetOnTypedKey(func(ev *fyne.KeyEvent) {
-		if (string(ev.Name) == "Q") {app.Quit()}
+		if (string(ev.Name) == "Q") {app.Quit()} else 
 		if (string(ev.Name) == "Space") {
 			fmt.Println("1 "+id_list[image_count])
 			fmt.Println("2 "+id_list[image_count+1])
 			fmt.Println("3 "+id_list[image_count+2])
 			fmt.Println("4 "+id_list[image_count+3])
+		} else
+		if (string(ev.Name) == "R") {
+			fmt.Println("manual get more tweets at image_count %d len-1 %d", image_count, len(img)-1)
+			go func() {img, maxid, err = get_twts(client, nick, count, maxid, img)}() //I GUESS
+		} else {
+			onPress(ev, w,grid, img)
 		}
-		onPress(ev, w,grid, img)
-		if (image_count+8) > (len(img)-1) {
-			fmt.Printf("get more tweets. count %d len-1 %d\n", image_count, len(img)-1)
-			img, maxid, err = get_twts(client, nick, count, maxid, img)
+		if (image_count+threshold) > (len(img)-1) {
+			fmt.Println("at the threshold")
+			if(!growing) {
+				fmt.Printf("threshold: auto get more tweets at image_count %d len-1 %d\n", image_count, len(img)-1)
+				growing = true
+				go func() {
+					img, maxid, err = get_twts(client, nick, count, maxid, img)
+					growing = false
+				}() //I GUESS
+			}
 		}
 	})
 	w.SetContent(grid)
 	w.ShowAndRun()
 }
 func onPress(ev *fyne.KeyEvent, w fyne.Window, grid *fyne.Container, img []*canvas.Image) {
-	fmt.Println("KeyDown: "+string(ev.Name))
 	if (ev.Name == "Right") {
 			if (image_count+4)<(len(img)-1) {
 				image_count+=4
-				fmt.Printf("page %d image_count %d\n", page, image_count)
+				fmt.Printf("image_count %d\n", image_count)
 				if (image_count+4)<(len(img)) {
 					grid = fyne.NewContainerWithLayout(layout.NewGridLayout(2),
 						img[image_count], img[image_count+1], img[image_count+2], img[image_count+3])
@@ -128,6 +134,7 @@ func onPress(ev *fyne.KeyEvent, w fyne.Window, grid *fyne.Container, img []*canv
 			}
 	} else if (ev.Name == "Left") {
 		image_count-=4
+		fmt.Printf("image_count %d\n", image_count)
 		if (image_count < 0) {image_count = 0}
 		grid = fyne.NewContainerWithLayout(layout.NewGridLayout(2),
 			img[image_count], img[image_count+1], img[image_count+2], img[image_count+3])
@@ -165,8 +172,8 @@ func get_twts(client *twitter.Client, nick string, count int, maxid int64, img [
 	}
 	twts, _, err := client.Timelines.UserTimeline(paras)
 
-	fmt.Printf("Tweets: %d\n", len(twts))
 	maxid = twts[0].ID
+	i := 0
 	for _, twt := range twts {
 		maxid = min(maxid, twt.ID)
 		if twt.ExtendedEntities != nil {
@@ -183,10 +190,11 @@ func get_twts(client *twitter.Client, nick string, count int, maxid int64, img [
 				img[len(img)-1].FillMode = canvas.ImageFillContain
 				s := fmt.Sprintf("https://twitter.com/%s/status/%d", nick, twt.ID)
 				id_list = append(id_list, s)
-				image_total += 1
+				i+=1
 			}
 		}
 	}
+	fmt.Printf("Got %d more images for total %d\n", i, len(img))
 	return img, maxid, nil
 }
 func min(x, y int64) int64 {
